@@ -10,4 +10,8 @@ export {
   validateMatrixHomeserverUrl,
 } from "./client/config.js";
 export { createMatrixClient } from "./client/create-client.js";
-export { resolveSharedMatrixClient, stopSharedClientForAccount } from "./client/shared.js";
+export {
+  resolveSharedMatrixClient,
+  stopSharedClientForAccount,
+  stopSharedClientInstance,
+} from "./client/shared.js";

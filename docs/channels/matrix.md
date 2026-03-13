@@ -403,6 +403,28 @@ Remove stale OpenClaw-managed devices with:
 openclaw matrix devices prune-stale
 ```
 
+### Direct Room Repair
+
+If direct-message state gets out of sync, OpenClaw can end up with stale `m.direct` mappings that point at old solo rooms instead of the live DM. Inspect the current mapping for a peer with:
+
+```bash
+openclaw matrix direct inspect --user-id @alice:example.org
+```
+
+Repair it with:
+
+```bash
+openclaw matrix direct repair --user-id @alice:example.org
+```
+
+Repair keeps the Matrix-specific logic inside the plugin:
+
+- it prefers a strict 1:1 DM that is already mapped in `m.direct`
+- otherwise it falls back to any currently joined strict 1:1 DM with that user
+- if no healthy DM exists, it creates a fresh direct room and rewrites `m.direct` to point at it
+
+The repair flow does not delete old rooms automatically. It only picks the healthy DM and updates the mapping so new Matrix sends, verification notices, and other direct-message flows target the right room again.
+
 ## Threads
 
 Matrix supports native Matrix threads for both automatic replies and message-tool sends.

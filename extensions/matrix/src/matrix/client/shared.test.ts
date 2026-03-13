@@ -18,6 +18,7 @@ import {
   resolveSharedMatrixClient,
   stopSharedClient,
   stopSharedClientForAccount,
+  stopSharedClientInstance,
 } from "./shared.js";
 
 function authFor(accountId: string): MatrixAuth {
@@ -120,6 +121,26 @@ describe("resolveSharedMatrixClient", () => {
     stopSharedClient();
 
     expect(poeClient.stop).toHaveBeenCalledTimes(1);
+  });
+
+  it("drops stopped shared clients by instance so the next resolve recreates them", async () => {
+    const mainAuth = authFor("main");
+    const firstMainClient = createMockClient("main-first");
+    const secondMainClient = createMockClient("main-second");
+
+    resolveMatrixAuthMock.mockResolvedValue(mainAuth);
+    createMatrixClientMock
+      .mockResolvedValueOnce(firstMainClient)
+      .mockResolvedValueOnce(secondMainClient);
+
+    const first = await resolveSharedMatrixClient({ accountId: "main", startClient: false });
+    stopSharedClientInstance(first as unknown as import("../sdk.js").MatrixClient);
+    const second = await resolveSharedMatrixClient({ accountId: "main", startClient: false });
+
+    expect(first).toBe(firstMainClient);
+    expect(second).toBe(secondMainClient);
+    expect(firstMainClient.stop).toHaveBeenCalledTimes(1);
+    expect(createMatrixClientMock).toHaveBeenCalledTimes(2);
   });
 
   it("reuses the effective implicit account instead of keying it as default", async () => {

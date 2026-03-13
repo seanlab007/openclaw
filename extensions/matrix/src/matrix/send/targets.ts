@@ -1,3 +1,4 @@
+import { inspectMatrixDirectRooms } from "../direct-management.js";
 import { isStrictDirectRoom } from "../direct-room.js";
 import type { MatrixClient } from "../sdk.js";
 import { isMatrixQualifiedUserId, normalizeMatrixResolvableTarget } from "../target-ids.js";
@@ -92,36 +93,16 @@ async function resolveDirectRoomId(client: MatrixClient, userId: string): Promis
     directRoomCache.delete(trimmed);
   }
 
-  // 1) Fast path: use account data (m.direct) for *this* logged-in user (the bot).
-  try {
-    const directContent = (await client.getAccountData(EventType.Direct)) as Record<
-      string,
-      string[] | undefined
-    >;
-    const list = Array.isArray(directContent?.[trimmed]) ? directContent[trimmed] : [];
-    for (const roomId of list) {
-      if (await isStrictDirectRoom({ client, roomId, remoteUserId: trimmed, selfUserId })) {
-        setDirectRoomCached(client, trimmed, roomId);
-        return roomId;
-      }
+  const inspection = await inspectMatrixDirectRooms({
+    client,
+    remoteUserId: trimmed,
+  });
+  if (inspection.activeRoomId) {
+    setDirectRoomCached(client, trimmed, inspection.activeRoomId);
+    if (inspection.mappedRoomIds[0] !== inspection.activeRoomId) {
+      await persistDirectRoom(client, trimmed, inspection.activeRoomId);
     }
-  } catch {
-    // Ignore and fall back.
-  }
-
-  // 2) Fallback: look for an existing joined room that is actually a 1:1 with the user.
-  // Many clients only maintain m.direct for *their own* account data, so relying on it is brittle.
-  try {
-    const rooms = await client.getJoinedRooms();
-    for (const roomId of rooms) {
-      if (await isStrictDirectRoom({ client, roomId, remoteUserId: trimmed, selfUserId })) {
-        setDirectRoomCached(client, trimmed, roomId);
-        await persistDirectRoom(client, trimmed, roomId);
-        return roomId;
-      }
-    }
-  } catch {
-    // Ignore and fall back.
+    return inspection.activeRoomId;
   }
 
   throw new Error(`No direct room found for ${trimmed} (m.direct missing)`);

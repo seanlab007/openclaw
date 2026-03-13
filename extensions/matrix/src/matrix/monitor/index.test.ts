@@ -14,7 +14,7 @@ const hoisted = vi.hoisted(() => {
     debug: vi.fn(),
   };
   const stopThreadBindingManager = vi.fn();
-  const stopSharedClientForAccount = vi.fn();
+  const stopSharedClientInstance = vi.fn();
   const setActiveMatrixClient = vi.fn();
   return {
     callOrder,
@@ -23,7 +23,7 @@ const hoisted = vi.hoisted(() => {
     resolveTextChunkLimit,
     setActiveMatrixClient,
     startClientError,
-    stopSharedClientForAccount,
+    stopSharedClientInstance,
     stopThreadBindingManager,
   };
 });
@@ -123,7 +123,7 @@ vi.mock("../client.js", () => ({
     hoisted.callOrder.push("start-client");
     return hoisted.client;
   }),
-  stopSharedClientForAccount: hoisted.stopSharedClientForAccount,
+  stopSharedClientInstance: hoisted.stopSharedClientInstance,
 }));
 
 vi.mock("../config-update.js", () => ({
@@ -203,7 +203,7 @@ describe("monitorMatrixProvider", () => {
     hoisted.startClientError = null;
     hoisted.resolveTextChunkLimit.mockReset().mockReturnValue(4000);
     hoisted.setActiveMatrixClient.mockReset();
-    hoisted.stopSharedClientForAccount.mockReset();
+    hoisted.stopSharedClientInstance.mockReset();
     hoisted.stopThreadBindingManager.mockReset();
     Object.values(hoisted.logger).forEach((mock) => mock.mockReset());
   });
@@ -245,7 +245,7 @@ describe("monitorMatrixProvider", () => {
     await expect(monitorMatrixProvider()).rejects.toThrow("start failed");
 
     expect(hoisted.stopThreadBindingManager).toHaveBeenCalledTimes(1);
-    expect(hoisted.stopSharedClientForAccount).toHaveBeenCalledTimes(1);
+    expect(hoisted.stopSharedClientInstance).toHaveBeenCalledTimes(1);
     expect(hoisted.setActiveMatrixClient).toHaveBeenNthCalledWith(1, hoisted.client, "default");
     expect(hoisted.setActiveMatrixClient).toHaveBeenNthCalledWith(2, null, "default");
   });

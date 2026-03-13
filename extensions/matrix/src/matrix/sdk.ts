@@ -501,6 +501,30 @@ export class MatrixClient {
     }
   }
 
+  async createDirectRoom(
+    remoteUserId: string,
+    opts: { encrypted?: boolean } = {},
+  ): Promise<string> {
+    const initialState = opts.encrypted
+      ? [
+          {
+            type: "m.room.encryption",
+            state_key: "",
+            content: {
+              algorithm: "m.megolm.v1.aes-sha2",
+            },
+          },
+        ]
+      : undefined;
+    const result = await this.client.createRoom({
+      invite: [remoteUserId],
+      is_direct: true,
+      preset: "trusted_private_chat",
+      initial_state: initialState,
+    });
+    return result.room_id;
+  }
+
   async sendMessage(roomId: string, content: MessageEventContent): Promise<string> {
     const sent = await this.client.sendMessage(roomId, content as never);
     return sent.event_id;

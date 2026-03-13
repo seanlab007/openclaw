@@ -6,6 +6,7 @@ import {
 } from "openclaw/plugin-sdk/matrix";
 import { matrixPlugin } from "./channel.js";
 import { resolveMatrixAccount, resolveMatrixAccountConfig } from "./matrix/accounts.js";
+import { withResolvedActionClient, withStartedActionClient } from "./matrix/actions/client.js";
 import { listMatrixOwnDevices, pruneMatrixStaleGatewayDevices } from "./matrix/actions/devices.js";
 import { updateMatrixOwnProfile } from "./matrix/actions/profile.js";
 import {
@@ -21,6 +22,11 @@ import { resolveMatrixAuthContext } from "./matrix/client.js";
 import { setMatrixSdkConsoleLogging, setMatrixSdkLogMode } from "./matrix/client/logging.js";
 import { resolveMatrixConfigPath, updateMatrixAccountConfig } from "./matrix/config-update.js";
 import { isOpenClawManagedMatrixDevice } from "./matrix/device-health.js";
+import {
+  inspectMatrixDirectRooms,
+  repairMatrixDirectRooms,
+  type MatrixDirectRoomCandidate,
+} from "./matrix/direct-management.js";
 import { applyMatrixProfileUpdate, type MatrixProfileUpdateResult } from "./profile-update.js";
 import { getMatrixRuntime } from "./runtime.js";
 import type { CoreConfig } from "./types.js";
@@ -309,6 +315,87 @@ async function addMatrixAccount(params: {
   };
 }
 
+function printDirectRoomCandidate(room: MatrixCliDirectRoomCandidate): void {
+  const members =
+    room.joinedMembers === null ? "unavailable" : room.joinedMembers.join(", ") || "none";
+  console.log(
+    `- ${room.roomId} [${room.source}] strict=${room.strict ? "yes" : "no"} joined=${members}`,
+  );
+}
+
+function printDirectRoomInspection(result: MatrixCliDirectRoomInspection): void {
+  printAccountLabel(result.accountId);
+  console.log(`Peer: ${result.remoteUserId}`);
+  console.log(`Self: ${result.selfUserId ?? "unknown"}`);
+  console.log(`Active direct room: ${result.activeRoomId ?? "none"}`);
+  console.log(
+    `Mapped rooms: ${result.mappedRoomIds.length ? result.mappedRoomIds.join(", ") : "none"}`,
+  );
+  console.log(
+    `Discovered strict rooms: ${result.discoveredStrictRoomIds.length ? result.discoveredStrictRoomIds.join(", ") : "none"}`,
+  );
+  if (result.mappedRooms.length > 0) {
+    console.log("Mapped room details:");
+    for (const room of result.mappedRooms) {
+      printDirectRoomCandidate(room);
+    }
+  }
+}
+
+async function inspectMatrixDirectRoom(params: {
+  accountId: string;
+  userId: string;
+}): Promise<MatrixCliDirectRoomInspection> {
+  return await withResolvedActionClient(
+    { accountId: params.accountId },
+    async (client) => {
+      const inspection = await inspectMatrixDirectRooms({
+        client,
+        remoteUserId: params.userId,
+      });
+      return {
+        accountId: params.accountId,
+        remoteUserId: inspection.remoteUserId,
+        selfUserId: inspection.selfUserId,
+        mappedRoomIds: inspection.mappedRoomIds,
+        mappedRooms: inspection.mappedRooms.map(toCliDirectRoomCandidate),
+        discoveredStrictRoomIds: inspection.discoveredStrictRoomIds,
+        activeRoomId: inspection.activeRoomId,
+      };
+    },
+    "persist",
+  );
+}
+
+async function repairMatrixDirectRoom(params: {
+  accountId: string;
+  userId: string;
+}): Promise<MatrixCliDirectRoomRepair> {
+  const cfg = getMatrixRuntime().config.loadConfig() as CoreConfig;
+  const account = resolveMatrixAccount({ cfg, accountId: params.accountId });
+  return await withStartedActionClient({ accountId: params.accountId }, async (client) => {
+    const repaired = await repairMatrixDirectRooms({
+      client,
+      remoteUserId: params.userId,
+      encrypted: account.config.encryption === true,
+    });
+    return {
+      accountId: params.accountId,
+      remoteUserId: repaired.remoteUserId,
+      selfUserId: repaired.selfUserId,
+      mappedRoomIds: repaired.mappedRoomIds,
+      mappedRooms: repaired.mappedRooms.map(toCliDirectRoomCandidate),
+      discoveredStrictRoomIds: repaired.discoveredStrictRoomIds,
+      activeRoomId: repaired.activeRoomId,
+      encrypted: account.config.encryption === true,
+      createdRoomId: repaired.createdRoomId,
+      changed: repaired.changed,
+      directContentBefore: repaired.directContentBefore,
+      directContentAfter: repaired.directContentAfter,
+    };
+  });
+}
+
 type MatrixCliProfileSetResult = MatrixProfileUpdateResult;
 
 async function setMatrixProfile(params: {
@@ -385,6 +472,40 @@ type MatrixCliVerificationStatus = {
   recoveryKeyCreatedAt: string | null;
   pendingVerifications: number;
 };
+
+type MatrixCliDirectRoomCandidate = {
+  roomId: string;
+  source: "account-data" | "joined";
+  strict: boolean;
+  joinedMembers: string[] | null;
+};
+
+type MatrixCliDirectRoomInspection = {
+  accountId: string;
+  remoteUserId: string;
+  selfUserId: string | null;
+  mappedRoomIds: string[];
+  mappedRooms: MatrixCliDirectRoomCandidate[];
+  discoveredStrictRoomIds: string[];
+  activeRoomId: string | null;
+};
+
+type MatrixCliDirectRoomRepair = MatrixCliDirectRoomInspection & {
+  encrypted: boolean;
+  createdRoomId: string | null;
+  changed: boolean;
+  directContentBefore: Record<string, string[]>;
+  directContentAfter: Record<string, string[]>;
+};
+
+function toCliDirectRoomCandidate(room: MatrixDirectRoomCandidate): MatrixCliDirectRoomCandidate {
+  return {
+    roomId: room.roomId,
+    source: room.source,
+    strict: room.strict,
+    joinedMembers: room.joinedMembers,
+  };
+}
 
 function resolveBackupStatus(status: {
   backupVersion: string | null;
@@ -702,6 +823,71 @@ export function registerMatrixCli(params: { program: Command }): void {
             }
           },
           errorPrefix: "Profile update failed",
+        });
+      },
+    );
+
+  const direct = root.command("direct").description("Inspect and repair Matrix direct-room state");
+
+  direct
+    .command("inspect")
+    .description("Inspect direct-room mappings for a Matrix user")
+    .requiredOption("--user-id <id>", "Peer Matrix user ID")
+    .option("--account <id>", "Account ID (for multi-account setups)")
+    .option("--verbose", "Show detailed diagnostics")
+    .option("--json", "Output as JSON")
+    .action(
+      async (options: { userId: string; account?: string; verbose?: boolean; json?: boolean }) => {
+        const accountId = resolveMatrixCliAccountId(options.account);
+        await runMatrixCliCommand({
+          verbose: options.verbose === true,
+          json: options.json === true,
+          run: async () =>
+            await inspectMatrixDirectRoom({
+              accountId,
+              userId: options.userId,
+            }),
+          onText: (result) => {
+            printDirectRoomInspection(result);
+          },
+          errorPrefix: "Direct room inspection failed",
+        });
+      },
+    );
+
+  direct
+    .command("repair")
+    .description("Repair Matrix direct-room mappings for a Matrix user")
+    .requiredOption("--user-id <id>", "Peer Matrix user ID")
+    .option("--account <id>", "Account ID (for multi-account setups)")
+    .option("--verbose", "Show detailed diagnostics")
+    .option("--json", "Output as JSON")
+    .action(
+      async (options: { userId: string; account?: string; verbose?: boolean; json?: boolean }) => {
+        const accountId = resolveMatrixCliAccountId(options.account);
+        await runMatrixCliCommand({
+          verbose: options.verbose === true,
+          json: options.json === true,
+          run: async () =>
+            await repairMatrixDirectRoom({
+              accountId,
+              userId: options.userId,
+            }),
+          onText: (result, verbose) => {
+            printDirectRoomInspection(result);
+            console.log(`Encrypted room creation: ${result.encrypted ? "enabled" : "disabled"}`);
+            console.log(`Created room: ${result.createdRoomId ?? "none"}`);
+            console.log(`m.direct updated: ${result.changed ? "yes" : "no"}`);
+            if (verbose) {
+              console.log(
+                `m.direct before: ${JSON.stringify(result.directContentBefore[result.remoteUserId] ?? [])}`,
+              );
+              console.log(
+                `m.direct after: ${JSON.stringify(result.directContentAfter[result.remoteUserId] ?? [])}`,
+              );
+            }
+          },
+          errorPrefix: "Direct room repair failed",
         });
       },
     );

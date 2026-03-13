@@ -17,7 +17,7 @@ import {
   resolveMatrixAuth,
   resolveMatrixAuthContext,
   resolveSharedMatrixClient,
-  stopSharedClientForAccount,
+  stopSharedClientInstance,
 } from "../client.js";
 import { createMatrixThreadBindingManager } from "../thread-bindings.js";
 import { registerMatrixAutoJoin } from "./auto-join.js";
@@ -139,7 +139,7 @@ export async function monitorMatrixProvider(opts: MonitorMatrixOpts = {}): Promi
     try {
       threadBindingManager?.stop();
     } finally {
-      stopSharedClientForAccount(auth);
+      stopSharedClientInstance(client);
       setActiveMatrixClient(null, auth.accountId);
     }
   };
