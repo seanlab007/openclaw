@@ -450,10 +450,16 @@ export const icons = {
       stroke-linecap="round"
       stroke-linejoin="round"
     >
-      <path
-        d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"
-      />
-      <circle cx="12" cy="13" r="3" />
+      <!-- Monitor outline -->
+      <rect x="2" y="3" width="20" height="14" rx="2" />
+      <path d="M8 21h8M12 17v4" />
+      <!-- Dashed selection rectangle inside screen -->
+      <rect x="6" y="6" width="12" height="8" rx="1" stroke-dasharray="2 1.5" stroke-width="1.2" />
+      <!-- Corner handles -->
+      <path d="M6 7.5V6h1.5" stroke-width="1.8" />
+      <path d="M16.5 6H18v1.5" stroke-width="1.8" />
+      <path d="M18 12.5V14h-1.5" stroke-width="1.8" />
+      <path d="M7.5 14H6v-1.5" stroke-width="1.8" />
     </svg>
   `,
 } as const;
