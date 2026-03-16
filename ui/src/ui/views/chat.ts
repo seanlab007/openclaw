@@ -1221,6 +1221,53 @@ export function renderChat(props: ChatProps) {
               ${icons.paperclip}
             </button>
 
+            <button
+              class="agent-chat__input-btn"
+              @click=${async () => {
+                if (!props.onAttachmentsChange) {
+                  return;
+                }
+                try {
+                  const stream = await (
+                    navigator.mediaDevices as MediaDevices & {
+                      getDisplayMedia: (opts?: object) => Promise<MediaStream>;
+                    }
+                  ).getDisplayMedia({ video: true, audio: false });
+                  const track = stream.getVideoTracks()[0];
+                  const imageCapture = new (
+                    window as Window & {
+                      ImageCapture?: new (track: MediaStreamTrack) => {
+                        grabFrame: () => Promise<ImageBitmap>;
+                      };
+                    }
+                  ).ImageCapture!(track);
+                  const bitmap = await imageCapture.grabFrame();
+                  const canvas = document.createElement("canvas");
+                  canvas.width = bitmap.width;
+                  canvas.height = bitmap.height;
+                  const ctx = canvas.getContext("2d")!;
+                  ctx.drawImage(bitmap, 0, 0);
+                  const dataUrl = canvas.toDataURL("image/png");
+                  stream.getTracks().forEach((t) => t.stop());
+                  const newAtt = {
+                    id: `att-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+                    dataUrl,
+                    mimeType: "image/png",
+                  };
+                  props.onAttachmentsChange([...(props.attachments ?? []), newAtt]);
+                  requestUpdate();
+                } catch (err) {
+                  if ((err as Error).name !== "NotAllowedError") {
+                    console.error("Screenshot failed:", err);
+                  }
+                }
+              }}
+              title="Capture screenshot"
+              ?disabled=${!props.connected}
+            >
+              ${icons.screenshot}
+            </button>
+
             ${
               isSttSupported()
                 ? html`

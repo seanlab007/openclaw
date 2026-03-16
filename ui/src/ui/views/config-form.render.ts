@@ -246,7 +246,11 @@ export const SECTION_META: Record<string, { label: string; description: string }
     description: "Environment variables passed to the gateway process",
   },
   update: { label: "Updates", description: "Auto-update settings and release channel" },
-  agents: { label: "Agents", description: "Agent configurations, models, and identities" },
+  agents: {
+    label: "Agents",
+    description:
+      "Agent configurations, models (including Vision/Image model for screenshot understanding), and identities",
+  },
   auth: { label: "Authentication", description: "API keys and authentication profiles" },
   channels: {
     label: "Channels",

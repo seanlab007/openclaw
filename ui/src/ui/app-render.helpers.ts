@@ -549,14 +549,18 @@ function resolveDefaultModelValue(state: AppViewState): string {
   return resolveServerChatModelValue(defaults?.model, defaults?.modelProvider);
 }
 
+function isVisionModel(entry: ModelCatalogEntry): boolean {
+  return Array.isArray(entry.input) && entry.input.includes("image");
+}
+
 function buildChatModelOptions(
   catalog: ModelCatalogEntry[],
   currentOverride: string,
   defaultModel: string,
-): Array<{ value: string; label: string }> {
+): Array<{ value: string; label: string; vision?: boolean }> {
   const seen = new Set<string>();
-  const options: Array<{ value: string; label: string }> = [];
-  const addOption = (value: string, label?: string) => {
+  const options: Array<{ value: string; label: string; vision?: boolean }> = [];
+  const addOption = (value: string, label?: string, vision?: boolean) => {
     const trimmed = value.trim();
     if (!trimmed) {
       return;
@@ -566,12 +570,14 @@ function buildChatModelOptions(
       return;
     }
     seen.add(key);
-    options.push({ value: trimmed, label: label ?? trimmed });
+    options.push({ value: trimmed, label: label ?? trimmed, vision });
   };
 
   for (const entry of catalog) {
     const option = buildChatModelOption(entry);
-    addOption(option.value, option.label);
+    const vision = isVisionModel(entry);
+    const labelWithBadge = vision ? `${option.label} [Vision]` : option.label;
+    addOption(option.value, labelWithBadge, vision);
   }
 
   if (currentOverride) {

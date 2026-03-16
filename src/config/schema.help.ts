@@ -1015,8 +1015,9 @@ export const FIELD_HELP: Record<string, string> = {
   "agents.defaults.model.fallbacks":
     "Ordered fallback models (provider/model). Used when the primary model fails.",
   "agents.defaults.imageModel.primary":
-    "Optional image model (provider/model) used when the primary model lacks image input.",
-  "agents.defaults.imageModel.fallbacks": "Ordered fallback image models (provider/model).",
+    "Vision/Image model (provider/model) used for screenshot analysis, image understanding, and visual tasks. Required when the primary model does not support image input (e.g., gpt-4o, claude-3-5-sonnet, gemini-1.5-pro). Format: provider/model-id.",
+  "agents.defaults.imageModel.fallbacks":
+    "Ordered fallback vision/image models (provider/model). Used when the primary image model fails or is unavailable.",
   "agents.defaults.pdfModel.primary":
     "Optional PDF model (provider/model) for the PDF analysis tool. Defaults to imageModel, then session model.",
   "agents.defaults.pdfModel.fallbacks": "Ordered fallback PDF models (provider/model).",
